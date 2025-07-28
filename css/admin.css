@@ -1,0 +1,92 @@
+.gform-settings-field-repeater-container {
+    margin: 10px 0;
+}
+
+.gform-settings-field-repeater-item {
+    border: 1px solid #ddd;
+    margin-bottom: 10px;
+    background: #f9f9f9;
+    border-radius: 4px;
+}
+
+.gform-settings-field-repeater-item-header {
+    background: #f1f1f1;
+    padding: 8px 12px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gform-settings-field-repeater-item-index {
+    font-weight: bold;
+    color: #666;
+}
+
+.gform-settings-field-repeater-item-remove-link {
+    color: #a00;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.gform-settings-field-repeater-item-remove-link:hover {
+    color: #dc3232;
+    text-decoration: underline;
+}
+
+.gform-settings-field-repeater-item-content {
+    padding: 12px;
+}
+
+.gform-settings-field-repeater-item-content .gform-settings-field {
+    margin-bottom: 10px;
+}
+
+.gform-settings-field-repeater-item-content .gform-settings-field:last-child {
+    margin-bottom: 0;
+}
+
+.gform-settings-field-repeater-item-content label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.gform-settings-field-repeater-item-content select,
+.gform-settings-field-repeater-item-content input[type="text"] {
+    width: 100%;
+    max-width: 300px;
+}
+
+.gform-settings-field-repeater-add-link {
+    display: inline-block;
+    background: #0073aa;
+    color: white;
+    padding: 8px 16px;
+    text-decoration: none;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+.gform-settings-field-repeater-add-link:hover {
+    background: #005a87;
+    color: white;
+    text-decoration: none;
+}
+
+.omnisend-save-conditions-btn {
+    margin-top: 10px !important;
+    margin-right: 10px !important;
+}
+
+.omnisend-save-status {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.omnisend-save-status span {
+    padding: 4px 8px;
+    border-radius: 3px;
+} 
