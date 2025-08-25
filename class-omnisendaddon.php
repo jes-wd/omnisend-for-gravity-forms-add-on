@@ -130,13 +130,13 @@ class OmnisendAddOn extends GFAddOn {
 		}
 
 		// Debug logging
-		error_log( 'Omnisend AJAX Save - Form ID: ' . $form_id );
-		error_log( 'Omnisend AJAX Save - Settings: ' . print_r( $settings, true ) );
+		// error_log( 'Omnisend AJAX Save - Form ID: ' . $form_id );
+		// error_log( 'Omnisend AJAX Save - Settings: ' . print_r( $settings, true ) );
 
 		// Save the updated settings
 		$result = $this->save_form_settings( $form, $settings );
 		
-		error_log( 'Omnisend AJAX Save - Result: ' . ( $result ? 'true' : 'false' ) );
+		// error_log( 'Omnisend AJAX Save - Result: ' . ( $result ? 'true' : 'false' ) );
 		
 		if ( $result === false ) {
 			wp_send_json_error( 'Failed to save settings' );
@@ -520,8 +520,8 @@ class OmnisendAddOn extends GFAddOn {
 	 * @return bool True if any condition matches (should NOT send to Omnisend), false otherwise.
 	 */
 	private function should_skip_omnisend( $entry, $form, $settings ) {
-		error_log('entry: ' . print_r( $entry, true ) );
-		error_log('settings: ' . print_r( $settings, true ) );
+		// // error_log('entry: ' . print_r( $entry, true ) );
+		// // error_log('settings: ' . print_r( $settings, true ) );
 		if ( empty( $settings['omnisend_conditions'] ) || ! is_array( $settings['omnisend_conditions'] ) ) {
 			return false;
 		}
@@ -549,13 +549,13 @@ class OmnisendAddOn extends GFAddOn {
 			if ( $field && ( $field->type === 'checkbox' || $field->type === 'multi_choice' ) ) {
 				// For checkbox/multi_choice fields, check all input fields
 				$inputs = $field->get_entry_inputs();
-				error_log( "Field $field_id inputs: " . print_r( $inputs, true ) );
+				// // error_log( "Field $field_id inputs: " . print_r( $inputs, true ) );
 				
 				if ( $inputs ) {
 					$checkbox_values = array();
 					foreach ( $inputs as $input ) {
 						$input_id = $input['id'];
-						error_log( "Checking input $input_id: " . ( isset( $entry[ $input_id ] ) ? $entry[ $input_id ] : 'not set' ) );
+						// // error_log( "Checking input $input_id: " . ( isset( $entry[ $input_id ] ) ? $entry[ $input_id ] : 'not set' ) );
 						if ( isset( $entry[ $input_id ] ) && ! empty( $entry[ $input_id ] ) ) {
 							$checkbox_values[] = $entry[ $input_id ];
 						}
@@ -567,18 +567,18 @@ class OmnisendAddOn extends GFAddOn {
 				$field_value = isset( $entry[ $field_id ] ) ? $entry[ $field_id ] : '';
 			}
 
-			error_log( "Checking condition - Field ID: $field_id, Field Type: " . ( $field ? $field->type : 'unknown' ) . ", Operator: $operator, Expected Value: $value, Actual Value: " . print_r( $field_value, true ) );
+			// // error_log( "Checking condition - Field ID: $field_id, Field Type: " . ( $field ? $field->type : 'unknown' ) . ", Operator: $operator, Expected Value: $value, Actual Value: " . print_r( $field_value, true ) );
 
 			switch ( $operator ) {
 				case 'is':
 					if ( is_array( $field_value ) ) {
 						if ( in_array( $value, $field_value ) ) {
-							error_log( "Condition matched: $field_id is $value" );
+							// // error_log( "Condition matched: $field_id is $value" );
 							return true;
 						}
 					} else {
 						if ( $field_value == $value ) {
-							error_log( "Condition matched: $field_id is $value" );
+							// // error_log( "Condition matched: $field_id is $value" );
 							return true;
 						}
 					}
@@ -586,12 +586,12 @@ class OmnisendAddOn extends GFAddOn {
 				case 'is_not':
 					if ( is_array( $field_value ) ) {
 						if ( ! in_array( $value, $field_value ) ) {
-							error_log( "Condition matched: $field_id is not $value" );
+							// error_log( "Condition matched: $field_id is not $value" );
 							return true;
 						}
 					} else {
 						if ( $field_value != $value ) {
-							error_log( "Condition matched: $field_id is not $value" );
+							// error_log( "Condition matched: $field_id is not $value" );
 							return true;
 						}
 					}
@@ -600,13 +600,13 @@ class OmnisendAddOn extends GFAddOn {
 					if ( is_array( $field_value ) ) {
 						foreach ( $field_value as $val ) {
 							if ( strpos( (string) $val, (string) $value ) !== false ) {
-								error_log( "Condition matched: $field_id contains $value" );
+								// error_log( "Condition matched: $field_id contains $value" );
 								return true;
 							}
 						}
 					} else {
 						if ( strpos( (string) $field_value, (string) $value ) !== false ) {
-							error_log( "Condition matched: $field_id contains $value" );
+							// error_log( "Condition matched: $field_id contains $value" );
 							return true;
 						}
 					}
@@ -621,25 +621,25 @@ class OmnisendAddOn extends GFAddOn {
 							}
 						}
 						if ( ! $found ) {
-							error_log( "Condition matched: $field_id does not contain $value" );
+							// error_log( "Condition matched: $field_id does not contain $value" );
 							return true;
 						}
 					} else {
 						if ( strpos( (string) $field_value, (string) $value ) === false ) {
-							error_log( "Condition matched: $field_id does not contain $value" );
+							// error_log( "Condition matched: $field_id does not contain $value" );
 							return true;
 						}
 					}
 					break;
 				case 'empty':
 					if ( empty( $field_value ) ) {
-						error_log( "Condition matched: $field_id is empty" );
+						// error_log( "Condition matched: $field_id is empty" );
 						return true;
 					}
 					break;
 				case 'not_empty':
 					if ( ! empty( $field_value ) ) {
-						error_log( "Condition matched: $field_id is not empty" );
+						// error_log( "Condition matched: $field_id is not empty" );
 						return true;
 					}
 					break;
@@ -664,14 +664,19 @@ class OmnisendAddOn extends GFAddOn {
 			$contact  = new Contact();
 			$settings = $this->get_form_settings( $form );
 
-			error_log( 'Omnisend send conditions: ' . print_r( $settings['omnisend_conditions'], true ) );
+
+			if ( empty( $settings ) ) {
+				return;
+			}
+			
+			// error_log( 'Omnisend send conditions: ' . print_r( $settings['omnisend_conditions'], true ) );
 
 			// Check Omnisend send conditions
 			if ( $this->should_skip_omnisend( $entry, $form, $settings ) ) {
-				error_log('skipping omnisend');
+				// error_log('skipping omnisend');
 				return; // Do not send to Omnisend if any condition matches
 			}
-			error_log('sending to omnisend');
+			// error_log('sending to omnisend');
 
 			$fields_to_process = array(
 				'email',
@@ -753,7 +758,7 @@ class OmnisendAddOn extends GFAddOn {
 
 			$response = \Omnisend\SDK\V1\Omnisend::get_client( OMNISEND_GRAVITY_ADDON_NAME, OMNISEND_GRAVITY_ADDON_VERSION )->create_contact( $contact );
 			if ( $response->get_wp_error()->has_errors() ) {
-				error_log( 'Error in after_submission: ' . $response->get_wp_error()->get_error_message()); // phpcs:ignore
+				// error_log( 'Error in after_submission: ' . $response->get_wp_error()->get_error_message()); // phpcs:ignore
 				return;
 			}
 
@@ -761,7 +766,7 @@ class OmnisendAddOn extends GFAddOn {
 
 		} catch ( Exception $e ) {
 			// todo check if it is possible to get exception? If not remove handling.
-			error_log( 'Error in after_submission: ' . $e->getMessage() ); // phpcs:ignore
+			// error_log( 'Error in after_submission: ' . $e->getMessage() ); // phpcs:ignore
 		}
 	}
 
