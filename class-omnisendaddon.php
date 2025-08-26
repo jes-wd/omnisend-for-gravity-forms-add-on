@@ -74,6 +74,10 @@ class OmnisendAddOn extends GFAddOn {
 		parent::init();
 		add_action( 'gform_after_submission', array( $this, 'after_submission' ), 10, 2 );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
+		
+		// Add partial entries hooks
+		add_action( 'gform_partialentries_post_entry_saved', array( $this, 'handle_partial_entry_saved' ), 10, 2 );
+		add_action( 'gform_partialentries_post_entry_updated', array( $this, 'handle_partial_entry_updated' ), 10, 2 );
 	}
 
 	/**
@@ -834,5 +838,82 @@ class OmnisendAddOn extends GFAddOn {
 		echo '<img width="900" src="' . plugins_url( '/images/omnisend-field-mapping.png', __FILE__ ) . '" alt="Omnisend Field Mapping" />'; // phpcs:ignore
 
 		echo '<div class="alert gforms_note_info">' . esc_html__( 'Having trouble? Explore our help article.', 'omnisend-for-gravity-forms' ) . '<br/><a target="_blank" href="https://support.omnisend.com/en/articles/8617559-integration-with-gravity-forms">' . esc_html__( 'Learn more', 'omnisend-for-gravity-forms' ) . '</a></div>';
+	}
+
+	/**
+	 * Handle partial entry saved event.
+	 *
+	 * @param array $partial_entry The partial entry object.
+	 * @param array $form The current form object.
+	 */
+	public function handle_partial_entry_saved( $partial_entry, $form ) {
+		$this->process_partial_entry_for_omnisend( $partial_entry, $form );
+	}
+
+	/**
+	 * Handle partial entry updated event.
+	 *
+	 * @param array $partial_entry The partial entry object.
+	 * @param array $form The current form object.
+	 */
+	public function handle_partial_entry_updated( $partial_entry, $form ) {
+		$this->process_partial_entry_for_omnisend( $partial_entry, $form );
+	}
+
+	/**
+	 * Process partial entry for Omnisend integration.
+	 *
+	 * @param array $partial_entry The partial entry object.
+	 * @param array $form The current form object.
+	 */
+	private function process_partial_entry_for_omnisend( $partial_entry, $form ) {
+		// Check if this is form ID 5
+		if ( $form['id'] != 5 ) {
+			return;
+		}
+
+		// Check if email field (ID 116) has been filled out
+		if ( empty( $partial_entry['116'] ) ) {
+			return;
+		}
+
+		$email = sanitize_email( $partial_entry['116'] );
+		if ( ! is_email( $email ) ) {
+			return;
+		}
+
+		// Check if this email has already been added to Omnisend using a transient
+		$transient_key = 'omnisend_email_added_' . md5( $email );
+		if ( get_transient( $transient_key ) ) {
+			return; // Email already processed
+		}
+
+		try {
+			// Create contact object
+			$contact = new Contact();
+			$contact->set_email( $email );
+			$contact->add_tag( 'medical form tag 1' );
+
+			// Set email consent
+			$contact->set_email_consent( 'gravity-forms' );
+			$contact->set_email_opt_in( 'gravity-forms' );
+
+			// Send to Omnisend
+			$response = \Omnisend\SDK\V1\Omnisend::get_client( OMNISEND_GRAVITY_ADDON_NAME, OMNISEND_GRAVITY_ADDON_VERSION )->create_contact( $contact );
+			
+			if ( $response->get_wp_error()->has_errors() ) {
+				error_log( 'Omnisend partial entry error: ' . $response->get_wp_error()->get_error_message() );
+				return;
+			}
+
+			// Set transient to prevent duplicate processing (expires in 24 hours)
+			set_transient( $transient_key, true, 24 * HOUR_IN_SECONDS );
+
+			// Enable web tracking
+			$this->enableWebTracking( $email, '' );
+
+		} catch ( Exception $e ) {
+			error_log( 'Omnisend partial entry exception: ' . $e->getMessage() );
+		}
 	}
 }
