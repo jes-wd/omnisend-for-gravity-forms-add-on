@@ -872,48 +872,54 @@ class OmnisendAddOn extends GFAddOn {
 			return;
 		}
 
-		// Check if email field (ID 116) has been filled out
-		if ( empty( $partial_entry['116'] ) ) {
-			return;
-		}
+		$fields_to_check = array(
+			'138' => 'medical form tag 1',
+			'116' => 'medical form tag 2',
+		);
 
-		$email = sanitize_email( $partial_entry['116'] );
-		if ( ! is_email( $email ) ) {
-			return;
-		}
-
-		// Check if this email has already been added to Omnisend using a transient
-		$transient_key = 'omnisend_email_added_' . md5( $email );
-		if ( get_transient( $transient_key ) ) {
-			return; // Email already processed
-		}
-
-		try {
-			// Create contact object
-			$contact = new Contact();
-			$contact->set_email( $email );
-			$contact->add_tag( 'medical form tag 1' );
-
-			// Set email consent
-			$contact->set_email_consent( 'gravity-forms' );
-			$contact->set_email_opt_in( 'gravity-forms' );
-
-			// Send to Omnisend
-			$response = \Omnisend\SDK\V1\Omnisend::get_client( OMNISEND_GRAVITY_ADDON_NAME, OMNISEND_GRAVITY_ADDON_VERSION )->create_contact( $contact );
-			
-			if ( $response->get_wp_error()->has_errors() ) {
-				error_log( 'Omnisend partial entry error: ' . $response->get_wp_error()->get_error_message() );
-				return;
+		foreach ( $fields_to_check as $field_id => $tag ) {
+			if ( empty( $partial_entry[ $field_id ] ) ) {
+				continue;
 			}
 
-			// Set transient to prevent duplicate processing (expires in 24 hours)
-			set_transient( $transient_key, true, 24 * HOUR_IN_SECONDS );
+			$email = sanitize_email( $partial_entry[ $field_id ] );
+			if ( ! is_email( $email ) ) {
+				continue;
+			}
 
-			// Enable web tracking
-			$this->enableWebTracking( $email, '' );
+			// Check if this email/tag combination has already been added to Omnisend using a transient
+			$transient_key = 'omnisend_email_added_' . md5( $email . '|' . $tag );
+			if ( get_transient( $transient_key ) ) {
+				continue; // Email/tag already processed
+			}
 
-		} catch ( Exception $e ) {
-			error_log( 'Omnisend partial entry exception: ' . $e->getMessage() );
+			try {
+				// Create contact object
+				$contact = new Contact();
+				$contact->set_email( $email );
+				$contact->add_tag( $tag );
+
+				// Set email consent
+				$contact->set_email_consent( 'gravity-forms' );
+				$contact->set_email_opt_in( 'gravity-forms' );
+
+				// Send to Omnisend
+				$response = \Omnisend\SDK\V1\Omnisend::get_client( OMNISEND_GRAVITY_ADDON_NAME, OMNISEND_GRAVITY_ADDON_VERSION )->create_contact( $contact );
+				
+				if ( $response->get_wp_error()->has_errors() ) {
+					error_log( 'Omnisend partial entry error: ' . $response->get_wp_error()->get_error_message() );
+					continue;
+				}
+
+				// Set transient to prevent duplicate processing for this email/tag (expires in 24 hours)
+				set_transient( $transient_key, true, 24 * HOUR_IN_SECONDS );
+
+				// Enable web tracking
+				$this->enableWebTracking( $email, '' );
+
+			} catch ( Exception $e ) {
+				error_log( 'Omnisend partial entry exception: ' . $e->getMessage() );
+			}
 		}
 	}
 }
