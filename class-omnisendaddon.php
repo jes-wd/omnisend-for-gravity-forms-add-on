@@ -75,9 +75,12 @@ class OmnisendAddOn extends GFAddOn {
 		add_action( 'gform_after_submission', array( $this, 'after_submission' ), 10, 2 );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
 		
-		// Add partial entries hooks
+		// // Add partial entries hooks
 		add_action( 'gform_partialentries_post_entry_saved', array( $this, 'handle_partial_entry_saved' ), 10, 2 );
 		add_action( 'gform_partialentries_post_entry_updated', array( $this, 'handle_partial_entry_updated' ), 10, 2 );
+		
+		// Add WC_Queue hook for processing delayed Omnisend contact creation
+		add_action( 'omnisend_process_delayed_contact_creation', array( $this, 'process_delayed_omnisend_contact' ), 10, 1 );
 	}
 
 	/**
@@ -862,6 +865,7 @@ class OmnisendAddOn extends GFAddOn {
 
 	/**
 	 * Process partial entry for Omnisend integration.
+	 * Now schedules a WC_Queue job instead of processing immediately.
 	 *
 	 * @param array $partial_entry The partial entry object.
 	 * @param array $form The current form object.
@@ -882,6 +886,10 @@ class OmnisendAddOn extends GFAddOn {
 				continue;
 			}
 
+			if ($field_id == '116' && empty( $partial_entry[ '113' ] )) {
+				continue;
+			}
+
 			$email = sanitize_email( $partial_entry[ $field_id ] );
 			if ( ! is_email( $email ) ) {
 				continue;
@@ -893,33 +901,82 @@ class OmnisendAddOn extends GFAddOn {
 				continue; // Email/tag already processed
 			}
 
-			try {
-				// Create contact object
-				$contact = new Contact();
-				$contact->set_email( $email );
-				$contact->add_tag( $tag );
+			// Prepare data for the background job
+			$contact_data = array(
+				'email' => $email,
+				'tag' => $tag,
+				'transient_key' => $transient_key,
+				'form_id' => $form['id'],
+				'field_id' => $field_id,
+			);
 
-				// Set email consent
-				$contact->set_email_consent( 'gravity-forms' );
-				$contact->set_email_opt_in( 'gravity-forms' );
-
-				// Send to Omnisend
-				$response = \Omnisend\SDK\V1\Omnisend::get_client( OMNISEND_GRAVITY_ADDON_NAME, OMNISEND_GRAVITY_ADDON_VERSION )->create_contact( $contact );
-				
-				if ( $response->get_wp_error()->has_errors() ) {
-					error_log( 'Omnisend partial entry error: ' . $response->get_wp_error()->get_error_message() );
-					continue;
-				}
-
-				// Set transient to prevent duplicate processing for this email/tag (expires in 24 hours)
-				set_transient( $transient_key, true, 24 * HOUR_IN_SECONDS );
-
-				// Enable web tracking
-				$this->enableWebTracking( $email, '' );
-
-			} catch ( Exception $e ) {
-				error_log( 'Omnisend partial entry exception: ' . $e->getMessage() );
+			// Schedule WC_Queue job for 30 seconds in the future
+			if ( class_exists( 'WC_Queue' ) && function_exists( 'WC' ) ) {
+				$queue = WC()->queue();
+				$queue->schedule_single(
+					time() + 5, // 5 seconds from now
+					'omnisend_process_delayed_contact_creation',
+					array( $contact_data ),
+					'omnisend-partial-entries'
+				);
+			} else {
+				// Fallback to immediate processing if WC_Queue is not available
+				$this->process_delayed_omnisend_contact( $contact_data );
 			}
+		}
+	}
+
+	/**
+	 * Process delayed Omnisend contact creation via WC_Queue.
+	 *
+	 * @param array $contact_data The contact data to process.
+	 */
+	public function process_delayed_omnisend_contact( $contact_data ) {
+		// Validate required data
+		if ( empty( $contact_data['email'] ) || empty( $contact_data['tag'] ) || empty( $contact_data['transient_key'] ) ) {
+			error_log( 'Omnisend delayed processing: Missing required contact data' );
+			return;
+		}
+
+		// Check if this email/tag combination has already been processed
+		if ( get_transient( $contact_data['transient_key'] ) ) {
+			return; // Email/tag already processed
+		}
+
+		// Check if Omnisend SDK is available
+		if ( ! class_exists( 'Omnisend\SDK\V1\Contact' ) ) {
+			error_log( 'Omnisend delayed processing: Contact class not available' );
+			return;
+		}
+
+		try {
+			// Create contact object
+			$contact = new Contact();
+			$contact->set_email( $contact_data['email'] );
+			$contact->add_tag( $contact_data['tag'] );
+
+			// Set email consent
+			$contact->set_email_consent( 'gravity-forms' );
+			$contact->set_email_opt_in( 'gravity-forms' );
+
+			// Send to Omnisend
+			$response = \Omnisend\SDK\V1\Omnisend::get_client( OMNISEND_GRAVITY_ADDON_NAME, OMNISEND_GRAVITY_ADDON_VERSION )->create_contact( $contact );
+			
+			if ( $response->get_wp_error()->has_errors() ) {
+				error_log( 'Omnisend delayed processing error: ' . $response->get_wp_error()->get_error_message() );
+				return;
+			}
+
+			// Set transient to prevent duplicate processing for this email/tag (expires in 24 hours)
+			set_transient( $contact_data['transient_key'], true, 24 * HOUR_IN_SECONDS );
+
+			// Enable web tracking
+			$this->enableWebTracking( $contact_data['email'], '' );
+
+			error_log( 'Omnisend delayed processing: Successfully added contact ' . $contact_data['email'] . ' with tag ' . $contact_data['tag'] );
+
+		} catch ( Exception $e ) {
+			error_log( 'Omnisend delayed processing exception: ' . $e->getMessage() );
 		}
 	}
 }
