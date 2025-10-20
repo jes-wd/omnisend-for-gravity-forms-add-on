@@ -59,35 +59,25 @@ class Omnisend_AddOn_Bootstrap {
 	/**
 	 * Initialize WooCommerce subscription manager
 	 */
-	public static function init_wc_subscription_manager() {
-		error_log('[Omnisend Bootstrap] init_wc_subscription_manager called');
-		
+	public static function init_wc_subscription_manager() {		
 		// Only run on live site (freyameds.com)
 		$site_url = get_site_url();
 		$parsed_url = parse_url($site_url);
 		$domain = isset($parsed_url['host']) ? $parsed_url['host'] : '';
 		
 		if ($domain !== 'freyameds.com') {
-			error_log('[Omnisend Bootstrap] Not running on live site (domain: ' . $domain . ') - skipping subscription manager initialization');
 			return;
 		}
-		
-		error_log('[Omnisend Bootstrap] Running on live site (freyameds.com) - proceeding with initialization');
 		
 		// Check if WooCommerce Subscriptions is active
 		if ( ! class_exists( 'WC_Subscriptions' ) ) {
-			error_log('[Omnisend Bootstrap] WooCommerce Subscriptions not active - skipping subscription manager');
 			return;
 		}
-
-		error_log('[Omnisend Bootstrap] WooCommerce Subscriptions detected - initializing subscription manager');
 
 		// Include the subscription manager class
 		require_once 'class-omnisend-wc-subscription-manager.php';
 
 		// Initialize the subscription manager
 		new Omnisend_WC_Subscription_Manager();
-		
-		error_log('[Omnisend Bootstrap] Subscription manager initialized successfully');
 	}
 }

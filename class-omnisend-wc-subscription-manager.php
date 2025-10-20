@@ -48,9 +48,7 @@ class Omnisend_WC_Subscription_Manager
 	 */
 	public function __construct()
 	{
-		error_log('[Omnisend Subscription Manager] Constructor called - initializing subscription manager');
 		$this->init_hooks();
-		error_log('[Omnisend Subscription Manager] Hooks initialized successfully');
 	}
 
 	/**
@@ -75,9 +73,7 @@ class Omnisend_WC_Subscription_Manager
 		
 		// Check if domain is exactly freyameds.com (no subdomain)
 		$is_live = ($domain === 'freyameds.com');
-		
-		error_log('[Omnisend Subscription Manager] Site URL: ' . $site_url . ', Domain: ' . $domain . ', Is Live: ' . ($is_live ? 'Yes' : 'No'));
-		
+				
 		return $is_live;
 	}
 
@@ -347,9 +343,9 @@ class Omnisend_WC_Subscription_Manager
 
 			if (!$existing_contact_response->get_wp_error()->has_errors()) {
 				$existing_contact = $existing_contact_response->get_contact();
-				error_log('[Omnisend Subscription Manager] Retrieved existing contact with properties: ' . print_r($existing_contact->get_custom_properties(), true));
+				// error_log('[Omnisend Subscription Manager] Retrieved existing contact with properties: ' . print_r($existing_contact->get_custom_properties(), true));
 			} else {
-				error_log('[Omnisend Subscription Manager] Could not retrieve existing contact: ' . $existing_contact_response->get_wp_error()->get_error_message());
+				// error_log('[Omnisend Subscription Manager] Could not retrieve existing contact: ' . $existing_contact_response->get_wp_error()->get_error_message());
 			}
 
 			// Create new contact object

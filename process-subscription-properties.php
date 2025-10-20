@@ -41,9 +41,9 @@ if (!defined('ABSPATH')) {
 const BATCH_SIZE = 100; // Process 100 subscriptions at a time
 const MEMORY_LIMIT = '1024M'; // Set memory limit for processing
 const NEW_SUBSCRIPTION_DAYS = 14;
-const PROCESSING_LIMIT = 50; // Set to 0 for no limit, or specify number to limit processing (e.g., 50 for testing)
+const PROCESSING_LIMIT = 8000; // Set to 0 for no limit, or specify number to limit processing (e.g., 50 for testing)
 const USERMETA_KEY = 'omnisend_subscription_processed'; // Key to track processed subscriptions
-const DRY_RUN = true; // Set to true to log actions without making actual Omnisend API calls
+const DRY_RUN = false; // Set to true to log actions without making actual Omnisend API calls
 
 // Check if we're on the live site (allow staging for dry run mode)
 $site_url = get_site_url();
@@ -93,16 +93,16 @@ $contact_found = 0;
 $start_time = time();
 
 // Process subscriptions in batches
-$offset = 0;
+$offset = 13550;
 $batch_number = 1;
 $has_more_subscriptions = true;
 
 while ($has_more_subscriptions) {
     echo "🔄 Processing batch {$batch_number} (starting from offset {$offset})...\n";
     
-    // Get batch of subscriptions
+    // Get batch of subscriptions (exclude pending subscriptions)
     $subscriptions = wcs_get_subscriptions(array(
-        'subscription_status' => 'any',
+        'subscription_status' => array('active', 'on-hold', 'cancelled'),
         'subscriptions_per_page' => BATCH_SIZE,
         'offset' => $offset,
         'orderby' => 'start_date',
@@ -368,7 +368,7 @@ function determine_subscription_status($subscription, $customer_email, $new_stat
     
     // For cancelled status, check if user has other active subscriptions
     if ($new_status === 'cancelled') {
-        $has_active_subscriptions = user_has_active_subscriptions($customer_email, $subscription->get_id());
+        $has_active_subscriptions = user_has_active_subscriptions($customer_email, $subscription);
         
         if (!$has_active_subscriptions) {
             return 'cancelled';
@@ -386,12 +386,18 @@ function determine_subscription_status($subscription, $customer_email, $new_stat
 }
 
 /**
- * Check if user has other active subscriptions
+ * Check if user has other active subscriptions with the same product type
  */
-function user_has_active_subscriptions($customer_email, $exclude_subscription_id) {
+function user_has_active_subscriptions($customer_email, $exclude_subscription) {
     // Get user ID from email
     $user = get_user_by('email', $customer_email);
     if (!$user) {
+        return false;
+    }
+    
+    // Get the product type of the subscription we're excluding
+    $exclude_product_type = get_subscription_product_type($exclude_subscription);
+    if (empty($exclude_product_type)) {
         return false;
     }
     
@@ -401,9 +407,17 @@ function user_has_active_subscriptions($customer_email, $exclude_subscription_id
         'subscriptions_per_page' => -1,
     ));
     
-    // Filter out the current subscription
+    // Filter out subscriptions that don't match the product type or are the excluded subscription
     foreach ($subscriptions as $key => $subscription) {
-        if ($subscription->get_id() == $exclude_subscription_id) {
+        // Skip the current subscription
+        if ($subscription->get_id() == $exclude_subscription->get_id()) {
+            unset($subscriptions[$key]);
+            continue;
+        }
+        
+        // Check if this subscription has the same product type
+        $subscription_product_type = get_subscription_product_type($subscription);
+        if ($subscription_product_type !== $exclude_product_type) {
             unset($subscriptions[$key]);
         }
     }
@@ -423,27 +437,41 @@ function contact_exists_in_omnisend($customer_email) {
         
         $response = $client->get_contact_by_email($customer_email);
         
+        // Check for WP errors first
         if ($response->get_wp_error()->has_errors()) {
             if (DRY_RUN) {
-                echo "    🧪 [DRY RUN] Contact does not exist: {$customer_email}\n";
+                echo "    🧪 [DRY RUN] Contact does not exist (WP error): {$customer_email}\n";
             }
             return false;
         }
         
+        // Try to get the contact, but handle potential null values
         $contact = $response->get_contact();
-        $exists = !empty($contact);
         
-        if (DRY_RUN) {
-            echo "    🧪 [DRY RUN] Contact " . ($exists ? "exists" : "does not exist") . ": {$customer_email}\n";
+        // Check if contact is null or empty
+        if (empty($contact) || $contact === null) {
+            if (DRY_RUN) {
+                echo "    🧪 [DRY RUN] Contact does not exist (null contact): {$customer_email}\n";
+            }
+            return false;
         }
         
-        // Note: Counter will be incremented in the calling function
+        // Contact exists
+        if (DRY_RUN) {
+            echo "    🧪 [DRY RUN] Contact exists: {$customer_email}\n";
+        }
         
-        return $exists;
+        return true;
         
     } catch (Exception $e) {
         if (DRY_RUN) {
             echo "    🧪 [DRY RUN] Error checking contact existence: {$customer_email} - " . $e->getMessage() . "\n";
+        }
+        return false;
+    } catch (TypeError $e) {
+        // Handle the specific TypeError from the SDK
+        if (DRY_RUN) {
+            echo "    🧪 [DRY RUN] SDK TypeError (contact likely doesn't exist): {$customer_email} - " . $e->getMessage() . "\n";
         }
         return false;
     }

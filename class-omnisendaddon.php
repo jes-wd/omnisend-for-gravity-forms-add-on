@@ -903,16 +903,15 @@ class OmnisendAddOn extends GFAddOn
 		}
 
 		$fields_to_check = array(
-			'138' => 'medical form tag 1',
-			'116' => 'medical form tag 2',
+			'116' => array('medical form tag 1', 'medical form tag 2'),
 		);
 
 		// Check if freya_draft_token_5 cookie is set and construct continue form URL
 		$continue_form_url = '';
 
 
-		foreach ($fields_to_check as $field_id => $tag) {
-			error_log("[Omnisend] Checking field $field_id for tag $tag");
+		foreach ($fields_to_check as $field_id => $tags) {
+			error_log("[Omnisend] Checking field $field_id for tags: " . implode(', ', $tags));
 
 			if (empty($partial_entry[$field_id])) {
 				error_log("[Omnisend] Field $field_id is empty in partial entry. Skipping.");
@@ -931,54 +930,57 @@ class OmnisendAddOn extends GFAddOn
 				continue;
 			}
 
-			// Check if this email/tag combination has already been added to Omnisend using a transient
-			$transient_key = 'omnisend_email_added_' . md5($email . '|' . $tag);
-			if (get_transient($transient_key)) {
-				error_log("[Omnisend] Transient already set for $email and tag $tag (key: $transient_key). Skipping.");
-				continue; // Email/tag already processed
-			}
-
-			if (empty($continue_form_url)) {
-				if (isset($_COOKIE['freya_draft_token_5']) && !empty($_COOKIE['freya_draft_token_5'])) {
-					$draft_token = sanitize_text_field($_COOKIE['freya_draft_token_5']);
-					$page_url    = get_permalink(71301);
-					if ($page_url) {
-						$continue_form_url = add_query_arg('gf_token', $draft_token, $page_url);
-						error_log('[Omnisend] Continue form URL constructed: ' . $continue_form_url);
-					} else {
-						error_log('[Omnisend] Page URL for continue form not found.');
-					}
-				} else {
-					error_log('[Omnisend] freya_draft_token_5 cookie not set or empty.');
+			// Process each tag for this field
+			foreach ($tags as $tag) {
+				// Check if this email/tag combination has already been added to Omnisend using a transient
+				$transient_key = 'omnisend_email_added_' . md5($email . '|' . $tag);
+				if (get_transient($transient_key)) {
+					error_log("[Omnisend] Transient already set for $email and tag $tag (key: $transient_key). Skipping.");
+					continue; // Email/tag already processed
 				}
-			}
 
-			// Prepare data for the background job
-			$contact_data = array(
-				'email' => $email,
-				'tag' => $tag,
-				'transient_key' => $transient_key,
-				'form_id' => $form['id'],
-				'field_id' => $field_id,
-				'continue_form_url' => $continue_form_url,
-			);
+				if (empty($continue_form_url)) {
+					if (isset($_COOKIE['freya_draft_token_5']) && !empty($_COOKIE['freya_draft_token_5'])) {
+						$draft_token = sanitize_text_field($_COOKIE['freya_draft_token_5']);
+						$page_url    = get_permalink(71301);
+						if ($page_url) {
+							$continue_form_url = add_query_arg('gf_token', $draft_token, $page_url);
+							error_log('[Omnisend] Continue form URL constructed: ' . $continue_form_url);
+						} else {
+							error_log('[Omnisend] Page URL for continue form not found.');
+						}
+					} else {
+						error_log('[Omnisend] freya_draft_token_5 cookie not set or empty.');
+					}
+				}
 
-			error_log('[Omnisend] Prepared contact_data: ' . print_r($contact_data, true));
-
-			// Schedule WC_Queue job for 5 seconds in the future
-			if (class_exists('WC_Queue') && function_exists('WC')) {
-				error_log('[Omnisend] Scheduling WC_Queue job for contact: ' . $email . ' with tag: ' . $tag);
-				$queue = WC()->queue();
-				$queue->schedule_single(
-					time() + 5, // 5 seconds from now
-					'omnisend_process_delayed_contact_creation',
-					array($contact_data),
-					'omnisend-partial-entries'
+				// Prepare data for the background job
+				$contact_data = array(
+					'email' => $email,
+					'tag' => $tag,
+					'transient_key' => $transient_key,
+					'form_id' => $form['id'],
+					'field_id' => $field_id,
+					'continue_form_url' => $continue_form_url,
 				);
-			} else {
-				error_log('[Omnisend] WC_Queue not available. Processing contact immediately for: ' . $email . ' with tag: ' . $tag);
-				// Fallback to immediate processing if WC_Queue is not available
-				$this->process_delayed_omnisend_contact($contact_data);
+
+				// error_log('[Omnisend] Prepared contact_data: ' . print_r($contact_data, true));
+
+				// Schedule WC_Queue job for 5 seconds in the future
+				if (class_exists('WC_Queue') && function_exists('WC')) {
+					error_log('[Omnisend] Scheduling WC_Queue job for contact: ' . $email . ' with tag: ' . $tag);
+					$queue = WC()->queue();
+					$queue->schedule_single(
+						time() + 5, // 5 seconds from now
+						'omnisend_process_delayed_contact_creation',
+						array($contact_data),
+						'omnisend-partial-entries'
+					);
+				} else {
+					error_log('[Omnisend] WC_Queue not available. Processing contact immediately for: ' . $email . ' with tag: ' . $tag);
+					// Fallback to immediate processing if WC_Queue is not available
+					$this->process_delayed_omnisend_contact($contact_data);
+				}
 			}
 		}
 	}
