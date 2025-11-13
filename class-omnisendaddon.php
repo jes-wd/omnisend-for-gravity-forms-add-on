@@ -86,6 +86,8 @@ class OmnisendAddOn extends GFAddOn
 
 		// Add WC_Queue hook for processing delayed Omnisend contact creation
 		add_action('omnisend_process_delayed_contact_creation', array($this, 'process_delayed_omnisend_contact'), 10, 1);
+
+		add_action('woocommerce_payment_complete', array($this, 'add_coupon_tag_to_omnisend_contact'), 10, 2);
 	}
 
 	/**
@@ -1042,6 +1044,72 @@ class OmnisendAddOn extends GFAddOn
 
 		} catch (Exception $e) {
 			error_log('Omnisend delayed processing exception: ' . $e->getMessage());
+		}
+	}
+
+	/**
+	 * Add coupon tag to Omnisend contact after payment is complete.
+	 *
+	 * @param int $id The order ID.
+	 * @param string $transaction_id The transaction ID.
+	 */
+	public function add_coupon_tag_to_omnisend_contact($id, $transaction_id)
+	{
+		// Check if Omnisend SDK is available
+		if (!class_exists('Omnisend\SDK\V1\Omnisend') || !class_exists('Omnisend\SDK\V1\Contact')) {
+			return;
+		}
+
+		// Check if WooCommerce is active
+		if (!function_exists('wc_get_order')) {
+			return;
+		}
+
+		// Get the order
+		$order = wc_get_order($id);
+		if (!$order) {
+			return;
+		}
+
+		// Get coupons used in the order
+		$coupon_codes = $order->get_coupon_codes();
+		if (empty($coupon_codes)) {
+			return; // No coupons used, nothing to do
+		}
+
+		// Get customer email
+		$email = $order->get_billing_email();
+		if (empty($email) || !is_email($email)) {
+			return; // No valid email, can't create/update contact
+		}
+
+		try {
+			// Create contact object
+			$contact = new Contact();
+			$contact->set_email($email);
+
+			// Add tag for each coupon code used
+			foreach ($coupon_codes as $coupon_code) {
+				// Sanitize coupon code for tag (keep alphanumeric, underscore, hyphen, convert to lowercase)
+				$sanitized_coupon_code = strtolower(preg_replace('/[^a-zA-Z0-9_-]/', '_', $coupon_code));
+				// Remove consecutive underscores
+				$sanitized_coupon_code = preg_replace('/_+/', '_', $sanitized_coupon_code);
+				// Remove leading/trailing underscores
+				$sanitized_coupon_code = trim($sanitized_coupon_code, '_');
+				$tag = 'used_coupon_' . $sanitized_coupon_code;
+				$contact->add_tag($tag);
+			}
+
+			// Send to Omnisend
+			$response = \Omnisend\SDK\V1\Omnisend::get_client(OMNISEND_GRAVITY_ADDON_NAME, OMNISEND_GRAVITY_ADDON_VERSION)->create_contact($contact);
+			
+			if ($response->get_wp_error()->has_errors()) {
+				error_log('Omnisend coupon tag error: ' . $response->get_wp_error()->get_error_message());
+				return;
+			}
+
+		} catch (Exception $e) {
+			error_log('Omnisend coupon tag exception: ' . $e->getMessage());
 		}
 	}
 }
