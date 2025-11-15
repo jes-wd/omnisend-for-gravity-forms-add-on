@@ -224,6 +224,12 @@ class Omnisend_WC_Subscription_Manager
 		
 		error_log('[Omnisend Subscription Manager] Determined status to set: ' . $status_to_set);
 
+		$current_host = str_replace('www.', '', sanitize_text_field($_SERVER['HTTP_HOST']));
+		if ($current_host !== 'freyameds.com') {
+			error_log('[Omnisend Subscription Manager] Not running on staging site - skipping property update');
+			return;
+		}
+
 		// Update the contact property
 		$this->update_contact_property($customer_email, $property_name, $status_to_set);
 	}
@@ -323,7 +329,7 @@ class Omnisend_WC_Subscription_Manager
 	private function update_contact_property($customer_email, $property_name, $property_value)
 	{
 		// Skip if no value to set
-		if ($property_value === null) {
+		if ($property_value === null ) {
 			error_log('[Omnisend Subscription Manager] Skipping property update - no value to set');
 			return;
 		}
